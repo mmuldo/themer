@@ -1,10 +1,7 @@
 package cmd
 
 import (
-	"fmt"
-	"github.com/mmuldo/themer/image"
 	"github.com/spf13/cobra"
-	"log"
 )
 
 // listCmd represents the list command
@@ -18,15 +15,6 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		i, e := image.Load("/home/matt/Downloads/Opal_-_Gen_1_With_Weapon.webp")
-		if e != nil {
-			log.Fatal(e)
-		}
-		m := image.GetColors(i)
-		ccl := image.RankColors(m)
-		for _, cc := range ccl {
-			fmt.Printf("%+v\n", cc)
-		}
 	},
 }
 
