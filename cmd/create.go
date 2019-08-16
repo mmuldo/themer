@@ -1,7 +1,8 @@
 package cmd
 
 import (
-	// "fmt"
+	"fmt"
+	"github.com/esimov/colorquant"
 	"github.com/jkl1337/go-chromath"
 	"github.com/jkl1337/go-chromath/deltae"
 	"github.com/spf13/cobra"
@@ -10,21 +11,50 @@ import (
 	_ "image/jpeg"
 	"image/png"
 	"log"
-	"math"
 	"os"
 	"sort"
 )
 
-const (
-	de = 10
-)
-
 var (
 	TargetIlluminant = &chromath.IlluminantRefD50
-	RGB2Xyz          = chromath.NewRGBTransformer(&chromath.SpaceSRGB, &chromath.AdaptationBradford, TargetIlluminant, &chromath.Scaler8bClamping, 1.0, nil)
-	Lab2Xyz          = chromath.NewLabTransformer(TargetIlluminant)
-	klch             = &deltae.KLChDefault
+	RGB2Xyz          = chromath.NewRGBTransformer(
+		&chromath.SpaceSRGB,
+		&chromath.AdaptationBradford,
+		TargetIlluminant,
+		&chromath.Scaler8bClamping,
+		1.0,
+		nil,
+	)
+	Lab2Xyz = chromath.NewLabTransformer(TargetIlluminant)
+	klch    = &deltae.KLChDefault
+	numPix  = 0.0
 )
+
+// ColorVol represents an RGB color, its Lab equivalent, and the number of pixels it
+// takes up in a given image.
+type ColorVol struct {
+	RGB   color.Color
+	Lab   chromath.Lab
+	Count int
+}
+
+type Roles struct {
+	Ranks []int
+}
+
+type byCount []ColorVol
+
+func (cvs byCount) Len() int           { return len(cvs) }
+func (cvs byCount) Less(i, j int) bool { return cvs[i].Count > cvs[j].Count }
+func (cvs byCount) Swap(i, j int)      { cvs[i], cvs[j] = cvs[j], cvs[i] }
+
+type byDarkness []ColorVol
+
+func (cvs byDarkness) Len() int { return len(cvs) }
+func (cvs byDarkness) Less(i, j int) bool {
+	return cvs[i].Lab.L() < cvs[j].Lab.L()
+}
+func (cvs byDarkness) Swap(i, j int) { cvs[i], cvs[j] = cvs[j], cvs[i] }
 
 // createCmd represents the create command
 var createCmd = &cobra.Command{
@@ -33,24 +63,33 @@ var createCmd = &cobra.Command{
 	Long:  `Creates a new theme from image`,
 	// Args:  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		i, e := load("/home/matt/Downloads/Opal_-_Gen_1_With_Weapon.webp")
+		i, e := quantize("/home/matt/Downloads/opal_fanart_su_by_urbietacreations_d8utzf1-pre.png", 18)
+		// i, e := load("/home/matt/Downloads/Opal_-_Gen_1_With_Weapon.webp")
 		if e != nil {
 			log.Fatal(e)
 		}
 
 		m := getColors(i)
 		cvs := map2ColorVolSlice(m)
-		sort.Sort(byCount(cvs))
 
-		// groups := groupColorVols(cvs)
-		// consolidate(&groups)
-		// for _, g := range groups {
-		// 	fmt.Printf("%+v\n", g)
-		// }
-		// fmt.Println(len(groups))
+		sort.Sort(byDarkness(cvs))
+
+		d, l := splitDarkAndLight(&cvs)
+
+		fmt.Println("DARK:")
+		for i := range d {
+			fmt.Println(d[i])
+		}
+		fmt.Println()
+
+		fmt.Println("LIGHT:")
+		for i := range l {
+			fmt.Println(l[i])
+		}
+		fmt.Println()
 
 		myImage := image.NewRGBA(image.Rect(0, 0, 800, 1200))
-		outFile, e := os.Create("/home/matt/Downloads/test.png")
+		outFile, e := os.Create("/home/matt/Downloads/test1.png")
 		if e != nil {
 			log.Fatal(e)
 		}
@@ -58,10 +97,7 @@ var createCmd = &cobra.Command{
 
 		x := 0
 		y := 0
-		for i, cv := range cvs {
-			if i >= 18 {
-				break
-			}
+		for _, cv := range cvs {
 			for w := x; w-x < 200; w++ {
 				for h := y; h-y < 200; h++ {
 					myImage.Set(w, h, cv.RGB)
@@ -79,117 +115,88 @@ var createCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(createCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// createCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// createCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
-// ColorVol represents an RGB color, its Lab equivalent, and the number of pixels it
-// takes up in a given image.
-type ColorVol struct {
-	RGB   color.Color
-	Lab   chromath.Lab
-	Count int
-}
+func delegate(dark *[]ColorVol, light *[]ColorVol, num int) map[int]ColorVol {
+	m := make(map[int]ColorVol)
+	var bg ColorVol
+	var fg ColorVol
+	dRoles := make([]Roles, len(dark))
+	lRoles := make([]Roles, len(light))
 
-type byCount []ColorVol
-
-func (cvs byCount) Len() int           { return len(cvs) }
-func (cvs byCount) Less(i, j int) bool { return cvs[i].Count > cvs[j].Count }
-func (cvs byCount) Swap(i, j int)      { cvs[i], cvs[j] = cvs[j], cvs[i] }
-
-type byDeviance []ColorVol
-
-func (cvs byDeviance) Len() int { return len(cvs) }
-func (cvs byDeviance) Less(i, j int) bool {
-	average := average(cvs).Lab
-	return deltae.CIE2000(cvs[i].Lab, average, klch) > deltae.CIE2000(cvs[j].Lab, average, klch)
-}
-func (cvs byDeviance) Swap(i, j int) { cvs[i], cvs[j] = cvs[j], cvs[i] }
-
-func average(cvs []ColorVol) ColorVol {
-	rt, gt, bt := 0.0, 0.0, 0.0
-	t := 0
-
-	for _, cv := range cvs {
-		r, g, b, _ := cv.RGB.RGBA()
-		rt += math.Pow(float64(uint8(r)), 2)
-		gt += math.Pow(float64(uint8(g)), 2)
-		bt += math.Pow(float64(uint8(b)), 2)
-
-		t += cv.Count
+	normal := []chromath.Lab{
+		//black
+		rgb2Lab(chromath.RGB{0.0, 0.0, 0.0}),
+		//red
+		rgb2Lab(chromath.RGB{128.0, 0.0, 0.0}),
+		//green
+		rgb2Lab(chromath.RGB{0.0, 128.0, 0.0}),
+		//yellow
+		rgb2Lab(chromath.RGB{128.0, 128.0, 0.0}),
+		//blue
+		rgb2Lab(chromath.RGB{0.0, 0.0, 128.0}),
+		//magenta
+		rgb2Lab(chromath.RGB{128.0, 0.0, 128.0}),
+		//cyan
+		rgb2Lab(chromath.RGB{0.0, 128.0, 128.0}),
+		//white
+		rgb2Lab(chromath.RGB{192.0, 192.0, 192.0}),
 	}
 
-	rgb := chromath.RGB{
-		math.Sqrt(rt / float64(len(cvs))),
-		math.Sqrt(gt / float64(len(cvs))),
-		math.Sqrt(bt / float64(len(cvs))),
+	// bright colors
+	bright := []chromath.Lab{
+		//black
+		rgb2Lab(chromath.RGB{128.0, 128.0, 128.0}),
+		//red
+		rgb2Lab(chromath.RGB{255.0, 0.0, 0.0}),
+		//green
+		rgb2Lab(chromath.RGB{0.0, 255.0, 0.0}),
+		//yellow
+		rgb2Lab(chromath.RGB{255.0, 255.0, 0.0}),
+		//blue
+		rgb2Lab(chromath.RGB{0.0, 0.0, 255.0}),
+		//magenta
+		rgb2Lab(chromath.RGB{255.0, 0.0, 255.0}),
+		//cyan
+		rgb2Lab(chromath.RGB{0.0, 255.0, 255.0}),
+		//white
+		rgb2Lab(chromath.RGB{255.0, 255.0, 255.0}),
 	}
 
-	lab := rgb2Lab(rgb)
+	sort.Sort(byCount(*dark))
+	sort.Sort(byCount(*light))
 
-	return ColorVol{
-		color.RGBA{
-			uint8(math.Round(rgb.R())),
-			uint8(math.Round(rgb.G())),
-			uint8(math.Round(rgb.B())),
-			255,
-		},
-		lab,
-		t,
-	}
-}
+	// most prominent color --> background
+	bg = (*dark)[0]
+	m[-2] = bg
 
-func consolidate(gs *[][]ColorVol) {
-	for len(*gs) > 18 {
-		var r float64
-		var a, b int
-		diff := deltae.CIE2000(average((*gs)[0]).Lab, average((*gs)[1]).Lab, klch)
-
-		for i := 0; i < len(*gs); i++ {
-			for j := i + 1; j < len(*gs); j++ {
-				r = deltae.CIE2000(average((*gs)[i]).Lab, average((*gs)[j]).Lab, klch)
-				if r < diff {
-					diff = r
-					a = i
-					b = j
-				}
-			}
+	// contrast to prominent --> foreground
+	fg = (*light)[0]
+	for _, c := range *light {
+		if deltae.CIE2000(c.Lab, bg.Lab, klch) > deltae.CIE2000(fg.Lab, bg.Lab, klch) {
+			fg = c
 		}
-
-		(*gs)[a] = append((*gs)[a], (*gs)[b]...)
-		(*gs) = append((*gs)[:b], (*gs)[b+1:]...)
 	}
+	m[-1] = fg
 
-	// TODO: split
-	// for len(*gs) < 18 {
-	// 	var a int
-	// 	var r float64
-	// 	dev := 0.0
+	//TODO: rank dark and light colors for roles
+	// rank roles for dark colors
+	for i := range normal {
 
-	// 	for _, g := range *gs {
-	// 		r =
-	// 	}
-	// }
+	}
 }
 
 // returns a map of an image's colors and the number of times each color occurs
-func getColors(img *image.Image) map[color.Color]int {
+func getColors(img image.Image) map[color.Color]int {
 	m := make(map[color.Color]int)
 
-	w, h := (*img).Bounds().Max.X, (*img).Bounds().Max.Y
+	w, h := img.Bounds().Max.X, img.Bounds().Max.Y
 	for x := 0; x < w; x += 1 {
 		for y := 0; y < h; y += 1 {
-			c := (*img).At(x, y)
+			c := img.At(x, y)
 			if _, _, _, a := c.RGBA(); a != 0 {
 				m[c]++
+				numPix++
 			}
 		}
 	}
@@ -197,40 +204,28 @@ func getColors(img *image.Image) map[color.Color]int {
 	return m
 }
 
-// func getDifference(cvs []ColorVol) (color.Color, color.Color, float64) {
+// converts a color-to-int map to a ColorVol slice
+func map2ColorVolSlice(m map[color.Color]int) []ColorVol {
+	cvs := make([]ColorVol, 0)
 
-// }
-
-func groupColorVols(cvs []ColorVol) [][]ColorVol {
-	g := make([][]ColorVol, 0)
-	done := make([]bool, len(cvs))
-
-	k := -1
-	for i := range cvs {
-		if done[i] {
+	i := 0
+	for k, v := range m {
+		if float64(m[k])/numPix < 0.0005 {
 			continue
 		}
-		g = append(g, []ColorVol{(cvs)[i]})
-		k++
-		done[i] = true
 
-		for j := i + 1; j < len(cvs); j++ {
-			if done[j] {
-				continue
-			}
-
-			if deltae.CIE2000((cvs)[i].Lab, (cvs)[j].Lab, klch) < de {
-				g[k] = append(g[k], (cvs)[j])
-				done[j] = true
-			}
-		}
+		r, g, b, _ := k.RGBA()
+		rgb := chromath.RGB{float64(byte(r)), float64(byte(g)), float64(byte(b))}
+		lab := rgb2Lab(rgb)
+		cvs = append(cvs, ColorVol{k, lab, v})
+		i++
 	}
 
-	return g
+	return cvs
 }
 
 // loads an image for use given a file path
-func load(path string) (*image.Image, error) {
+func quantize(path string, num int) (image.Image, error) {
 	f, e := os.Open(path)
 	if e != nil {
 		return nil, e
@@ -241,24 +236,12 @@ func load(path string) (*image.Image, error) {
 	if e != nil {
 		return nil, e
 	}
+	b := i.Bounds()
+	o := image.NewRGBA(image.Rect(b.Min.X, b.Min.Y, b.Max.X, b.Max.Y))
 
-	return &i, nil
-}
+	colorquant.NoDither.Quantize(i, o, num, false, true)
 
-// converts a color-to-int map to a ColorVol slice
-func map2ColorVolSlice(m map[color.Color]int) []ColorVol {
-	cvs := make([]ColorVol, len(m))
-
-	i := 0
-	for k, v := range m {
-		r, g, b, _ := k.RGBA()
-		rgb := chromath.RGB{float64(byte(r)), float64(byte(g)), float64(byte(b))}
-		lab := rgb2Lab(rgb)
-		cvs[i] = ColorVol{k, lab, v}
-		i++
-	}
-
-	return cvs
+	return o, nil
 }
 
 // converts an RGB color to its Lab equivalent
@@ -267,6 +250,11 @@ func rgb2Lab(rgb chromath.RGB) chromath.Lab {
 	return Lab2Xyz.Invert(xyz)
 }
 
-// func splitGroup(cvl *image.ColorVolList) (image.ColorVolList, image.ColorVolList) {
+func splitDarkAndLight(cvs *[]ColorVol) ([]ColorVol, []ColorVol) {
+	sort.Sort(byDarkness(*cvs))
 
-// }
+	d := (*cvs)[:len(*cvs)/2]
+	l := (*cvs)[len(*cvs)/2:]
+
+	return d, l
+}
