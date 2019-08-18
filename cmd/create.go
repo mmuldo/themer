@@ -121,8 +121,8 @@ func delegate(dark *[]ColorVol, light *[]ColorVol, num int) map[int]ColorVol {
 	m := make(map[int]ColorVol)
 	var bg ColorVol
 	var fg ColorVol
-	dRoles := make([]Roles, len(dark))
-	lRoles := make([]Roles, len(light))
+	dRoles := make([]Roles, len(*dark))
+	lRoles := make([]Roles, len(*light))
 
 	normal := []chromath.Lab{
 		//black
@@ -173,17 +173,50 @@ func delegate(dark *[]ColorVol, light *[]ColorVol, num int) map[int]ColorVol {
 	// contrast to prominent --> foreground
 	fg = (*light)[0]
 	for _, c := range *light {
-		if deltae.CIE2000(c.Lab, bg.Lab, klch) > deltae.CIE2000(fg.Lab, bg.Lab, klch) {
+		if diff(bg.Lab, c.Lab, fg.Lab) > 0 {
 			fg = c
 		}
 	}
 	m[-1] = fg
 
-	//TODO: rank dark and light colors for roles
 	// rank roles for dark colors
-	for i := range normal {
+	for i := range *dark {
+		for j := range normal {
+			k := 0
+			for _, d := range dRoles[i].Ranks {
+				if diff((*dark)[i].Lab, normal[j], normal[d]) < 0 {
+					break
+				}
+				k++
+			}
 
+			dRoles[i].Ranks = append(dRoles[i].Ranks[:k], append([]int{j}, dRoles[i].Ranks[k:]...)...)
+		}
 	}
+
+	// rank roles for light colors
+	for i := range *light {
+		for j := range bright {
+			k := 0
+			for _, d := range lRoles[i].Ranks {
+				if diff((*light)[i].Lab, bright[j], bright[d]) < 0 {
+					break
+				}
+				k++
+			}
+
+			lRoles[i].Ranks = append(lRoles[i].Ranks[:k], append([]int{j}, lRoles[i].Ranks[k:]...)...)
+		}
+	}
+
+	return nil
+}
+
+// base is the color used for comparison. return value is postive
+// if c0 is more different; negative if c1 is more different; 0 if
+// both colors are just as different from base.
+func diff(base chromath.Lab, c0 chromath.Lab, c1 chromath.Lab) float64 {
+	return deltae.CIE2000(c0, base, klch) - deltae.CIE2000(c1, base, klch)
 }
 
 // returns a map of an image's colors and the number of times each color occurs
