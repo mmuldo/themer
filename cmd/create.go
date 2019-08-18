@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	// "errors"
 	"fmt"
 	"github.com/esimov/colorquant"
 	"github.com/jkl1337/go-chromath"
@@ -38,10 +39,6 @@ type ColorVol struct {
 	Count int
 }
 
-type Roles struct {
-	Ranks []int
-}
-
 type byCount []ColorVol
 
 func (cvs byCount) Len() int           { return len(cvs) }
@@ -76,19 +73,21 @@ var createCmd = &cobra.Command{
 
 		d, l := splitDarkAndLight(&cvs)
 
-		fmt.Println("DARK:")
-		for i := range d {
-			fmt.Println(d[i])
+		p, e := delegate(&d, &l)
+		if e != nil {
+			log.Fatal(e)
 		}
-		fmt.Println()
 
-		fmt.Println("LIGHT:")
-		for i := range l {
-			fmt.Println(l[i])
+		var keys []int
+		for k := range p {
+			keys = append(keys, k)
 		}
-		fmt.Println()
+		sort.Ints(keys)
+		for _, k := range keys {
+			fmt.Println(k, ":", p[k])
+		}
 
-		myImage := image.NewRGBA(image.Rect(0, 0, 800, 1200))
+		myImage := image.NewRGBA(image.Rect(0, 0, 400, 900))
 		outFile, e := os.Create("/home/matt/Downloads/test1.png")
 		if e != nil {
 			log.Fatal(e)
@@ -97,17 +96,40 @@ var createCmd = &cobra.Command{
 
 		x := 0
 		y := 0
-		for _, cv := range cvs {
-			for w := x; w-x < 200; w++ {
-				for h := y; h-y < 200; h++ {
-					myImage.Set(w, h, cv.RGB)
+		for k, v := range p {
+			if k < 0 {
+				// for w := 150; w < 200; w++ {
+				// 	for h := -k * 2; h < h+50; h++ {
+				// 		myImage.Set(w, h, v.RGB)
+				// 	}
+				// }
+				continue
+			}
+			for w := (k / 8) * 100; x < 100; w++ {
+				x++
+				for h := (k % 8) * 100; y < 100; h++ {
+					y++
+					myImage.Set(w, h, v.RGB)
 				}
+				y = 0
 			}
-			x = (x + 200) % 800
-			if x == 0 {
-				y += 200
-			}
+			x = 0
+			fmt.Println(k, ":", (k/9)*100, (k%9)*100)
 		}
+
+		// x := 0
+		// y := 0
+		// for _, cv := range cvs {
+		// 	for w := x; w-x < 200; w++ {
+		// 		for h := y; h-y < 200; h++ {
+		// 			myImage.Set(w, h, cv.RGB)
+		// 		}
+		// 	}
+		// 	x = (x + 200) % 800
+		// 	if x == 0 {
+		// 		y += 200
+		// 	}
+		// }
 
 		png.Encode(outFile, myImage)
 	},
@@ -117,12 +139,10 @@ func init() {
 	rootCmd.AddCommand(createCmd)
 }
 
-func delegate(dark *[]ColorVol, light *[]ColorVol, num int) map[int]ColorVol {
+func delegate(dark *[]ColorVol, light *[]ColorVol) (map[int]ColorVol, error) {
 	m := make(map[int]ColorVol)
 	var bg ColorVol
 	var fg ColorVol
-	dRoles := make([]Roles, len(*dark))
-	lRoles := make([]Roles, len(*light))
 
 	normal := []chromath.Lab{
 		//black
@@ -179,37 +199,61 @@ func delegate(dark *[]ColorVol, light *[]ColorVol, num int) map[int]ColorVol {
 	}
 	m[-1] = fg
 
-	// rank roles for dark colors
-	for i := range *dark {
-		for j := range normal {
-			k := 0
-			for _, d := range dRoles[i].Ranks {
-				if diff((*dark)[i].Lab, normal[j], normal[d]) < 0 {
-					break
-				}
-				k++
+	for _, d := range *dark {
+		if d == bg {
+			continue
+		}
+
+		var sim int
+		for i := range bright {
+			if _, ok := m[8+i]; ok {
+				continue
+			}
+			sim = i
+			break
+		}
+		for i := range normal {
+			if _, ok := m[i]; ok {
+				continue
 			}
 
-			dRoles[i].Ranks = append(dRoles[i].Ranks[:k], append([]int{j}, dRoles[i].Ranks[k:]...)...)
+			if diff(d.Lab, normal[i], normal[sim]) < 0 {
+				sim = i
+			}
 		}
+		fmt.Println(sim)
+
+		m[sim] = d
 	}
 
-	// rank roles for light colors
-	for i := range *light {
-		for j := range bright {
-			k := 0
-			for _, d := range lRoles[i].Ranks {
-				if diff((*light)[i].Lab, bright[j], bright[d]) < 0 {
-					break
-				}
-				k++
+	for _, l := range *light {
+		if l == fg {
+			continue
+		}
+
+		var sim int
+		for i := range bright {
+			if _, ok := m[8+i]; ok {
+				continue
+			}
+			sim = i
+			break
+		}
+		for i := range bright {
+			if _, ok := m[8+i]; ok {
+				continue
 			}
 
-			lRoles[i].Ranks = append(lRoles[i].Ranks[:k], append([]int{j}, lRoles[i].Ranks[k:]...)...)
+			if diff(l.Lab, bright[i], bright[sim]) < 0 {
+				sim = i
+			}
 		}
+		fmt.Println(sim)
+
+		m[8+sim] = l
 	}
 
-	return nil
+	return m, nil
 }
 
 // base is the color used for comparison. return value is postive
