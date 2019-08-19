@@ -89,7 +89,7 @@ var createCmd = &cobra.Command{
 		}
 		sort.Ints(keys)
 		for _, k := range keys {
-			fmt.Printf("color%d: %s\n", k, rgb2Hex(p[k].RGB))
+			fmt.Printf("color%d = %s\n", k, rgb2Hex(p[k].RGB))
 		}
 
 		// myImage := image.NewRGBA(image.Rect(0, 0, 400, 900))
