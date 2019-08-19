@@ -59,8 +59,8 @@ var createCmd = &cobra.Command{
 	Long:  `Creates a new theme from image`,
 	// Args:  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		// i, e := quantize("/home/matt/Downloads/opal_fanart_su_by_urbietacreations_d8utzf1-pre.png", 18)
-		i, e := quantize("/home/matt/Downloads/Opal_-_Gen_1_With_Weapon.webp", 17)
+		i, e := quantize("/home/matt/Downloads/opal_fanart_su_by_urbietacreations_d8utzf1-pre.png", 16)
+		// i, e := quantize("/home/matt/Downloads/Opal_-_Gen_1_With_Weapon.webp", 17)
 		if e != nil {
 			log.Fatal(e)
 		}
@@ -89,37 +89,37 @@ var createCmd = &cobra.Command{
 		}
 		sort.Ints(keys)
 		for _, k := range keys {
-			fmt.Printf("color%d: #%s", k, keys[k])
+			fmt.Printf("color%d: %s\n", k, rgb2Hex(p[k].RGB))
 		}
 
-		myImage := image.NewRGBA(image.Rect(0, 0, 400, 900))
-		outFile, e := os.Create("/home/matt/Downloads/test1.png")
-		if e != nil {
-			log.Fatal(e)
-		}
-		defer outFile.Close()
+		// myImage := image.NewRGBA(image.Rect(0, 0, 400, 900))
+		// outFile, e := os.Create("/home/matt/Downloads/test1.png")
+		// if e != nil {
+		// 	log.Fatal(e)
+		// }
+		// defer outFile.Close()
 
-		x := 0
-		y := 0
-		for k, v := range p {
-			if k < 0 {
-				for w := 300; w < 400; w++ {
-					for h := (-k % 2) * 100; h%100 < 99; h++ {
-						myImage.Set(w, h, v.RGB)
-					}
-				}
-				continue
-			}
-			for w := (k / 8) * 100; x < 100; w++ {
-				x++
-				for h := (k % 8) * 100; y < 100; h++ {
-					y++
-					myImage.Set(w, h, v.RGB)
-				}
-				y = 0
-			}
-			x = 0
-		}
+		// x := 0
+		// y := 0
+		// for k, v := range p {
+		// 	if k < 0 {
+		// 		for w := 300; w < 400; w++ {
+		// 			for h := (-k % 2) * 100; h%100 < 99; h++ {
+		// 				myImage.Set(w, h, v.RGB)
+		// 			}
+		// 		}
+		// 		continue
+		// 	}
+		// 	for w := (k / 8) * 100; x < 100; w++ {
+		// 		x++
+		// 		for h := (k % 8) * 100; y < 100; h++ {
+		// 			y++
+		// 			myImage.Set(w, h, v.RGB)
+		// 		}
+		// 		y = 0
+		// 	}
+		// 	x = 0
+		// }
 
 		// x := 0
 		// y := 0
@@ -135,7 +135,7 @@ var createCmd = &cobra.Command{
 		// 	}
 		// }
 
-		png.Encode(outFile, myImage)
+		// png.Encode(outFile, myImage)
 	},
 }
 
@@ -145,47 +145,6 @@ func init() {
 
 func delegate(dark *[]ColorVol, light *[]ColorVol) (map[int]ColorVol, error) {
 	m := make(map[int]ColorVol)
-	// var bg ColorVol
-	// var fg ColorVol
-
-	// normal := []chromath.Lab{
-	// 	//black
-	// 	rgb2Lab(chromath.RGB{0.0, 0.0, 0.0}),
-	// 	//red
-	// 	rgb2Lab(chromath.RGB{128.0, 0.0, 0.0}),
-	// 	//green
-	// 	rgb2Lab(chromath.RGB{0.0, 128.0, 0.0}),
-	// 	//yellow
-	// 	rgb2Lab(chromath.RGB{128.0, 128.0, 0.0}),
-	// 	//blue
-	// 	rgb2Lab(chromath.RGB{0.0, 0.0, 128.0}),
-	// 	//magenta
-	// 	rgb2Lab(chromath.RGB{128.0, 0.0, 128.0}),
-	// 	//cyan
-	// 	rgb2Lab(chromath.RGB{0.0, 128.0, 128.0}),
-	// 	//white
-	// 	rgb2Lab(chromath.RGB{192.0, 192.0, 192.0}),
-	// }
-
-	// // bright colors
-	// bright := []chromath.Lab{
-	// 	//black
-	// 	rgb2Lab(chromath.RGB{128.0, 128.0, 128.0}),
-	// 	//red
-	// 	rgb2Lab(chromath.RGB{255.0, 0.0, 0.0}),
-	// 	//green
-	// 	rgb2Lab(chromath.RGB{0.0, 255.0, 0.0}),
-	// 	//yellow
-	// 	rgb2Lab(chromath.RGB{255.0, 255.0, 0.0}),
-	// 	//blue
-	// 	rgb2Lab(chromath.RGB{0.0, 0.0, 255.0}),
-	// 	//magenta
-	// 	rgb2Lab(chromath.RGB{255.0, 0.0, 255.0}),
-	// 	//cyan
-	// 	rgb2Lab(chromath.RGB{0.0, 255.0, 255.0}),
-	// 	//white
-	// 	rgb2Lab(chromath.RGB{255.0, 255.0, 255.0}),
-	// }
 
 	sort.Sort(byDarkness(*dark))
 	sort.Sort(byDarkness(*light))
@@ -197,73 +156,6 @@ func delegate(dark *[]ColorVol, light *[]ColorVol) (map[int]ColorVol, error) {
 	for i, l := range *light {
 		m[len(*dark)+i] = l
 	}
-
-	// // most prominent color --> background
-	// bg = (*dark)[0]
-	// m[-2] = bg
-
-	// // contrast to prominent --> foreground
-	// fg = (*light)[0]
-	// for _, c := range *light {
-	// 	if diff(bg.Lab, c.Lab, fg.Lab) > 0 {
-	// 		fg = c
-	// 	}
-	// }
-	// m[-1] = fg
-
-	// for _, d := range *dark {
-	// 	if d == bg {
-	// 		continue
-	// 	}
-
-	// 	var sim int
-	// 	for i := range bright {
-	// 		if _, ok := m[8+i]; ok {
-	// 			continue
-	// 		}
-	// 		sim = i
-	// 		break
-	// 	}
-	// 	for i := range normal {
-	// 		if _, ok := m[i]; ok {
-	// 			continue
-	// 		}
-
-	// 		if diff(d.Lab, normal[i], normal[sim]) < 0 {
-	// 			sim = i
-	// 		}
-	// 	}
-	// 	fmt.Println(sim)
-
-	// 	m[sim] = d
-	// }
-
-	// for _, l := range *light {
-	// 	if l == fg {
-	// 		continue
-	// 	}
-
-	// 	var sim int
-	// 	for i := range bright {
-	// 		if _, ok := m[8+i]; ok {
-	// 			continue
-	// 		}
-	// 		sim = i
-	// 		break
-	// 	}
-	// 	for i := range bright {
-	// 		if _, ok := m[8+i]; ok {
-	// 			continue
-	// 		}
-
-	// 		if diff(l.Lab, bright[i], bright[sim]) < 0 {
-	// 			sim = i
-	// 		}
-	// 	}
-	// 	fmt.Println(sim)
-
-	// 	m[8+sim] = l
-	// }
 
 	return m, nil
 }
@@ -333,7 +225,7 @@ func quantize(path string, num int) (image.Image, error) {
 
 func rgb2Hex(rgb color.Color) string {
 	r, g, b, _ := rgb.RGBA()
-	return fmt.Sprintf("#%x%x%x", r, g, b)
+	return fmt.Sprintf("#%x%x%x", byte(r), byte(g), byte(b))
 }
 
 // converts an RGB color to its Lab equivalent
