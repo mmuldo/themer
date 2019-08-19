@@ -28,7 +28,6 @@ var (
 	)
 	Lab2Xyz = chromath.NewLabTransformer(TargetIlluminant)
 	klch    = &deltae.KLChDefault
-	numPix  = 0.0
 )
 
 // ColorVol represents an RGB color, its Lab equivalent, and the number of pixels it
@@ -60,11 +59,17 @@ var createCmd = &cobra.Command{
 	Long:  `Creates a new theme from image`,
 	// Args:  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		i, e := quantize("/home/matt/Downloads/opal_fanart_su_by_urbietacreations_d8utzf1-pre.png", 18)
-		// i, e := load("/home/matt/Downloads/Opal_-_Gen_1_With_Weapon.webp")
+		// i, e := quantize("/home/matt/Downloads/opal_fanart_su_by_urbietacreations_d8utzf1-pre.png", 18)
+		i, e := quantize("/home/matt/Downloads/Opal_-_Gen_1_With_Weapon.webp", 17)
 		if e != nil {
 			log.Fatal(e)
 		}
+		hello, e := os.Create("/home/matt/Downloads/test2.png")
+		if e != nil {
+			log.Fatal(e)
+		}
+		defer hello.Close()
+		png.Encode(hello, i)
 
 		m := getColors(i)
 		cvs := map2ColorVolSlice(m)
@@ -84,7 +89,7 @@ var createCmd = &cobra.Command{
 		}
 		sort.Ints(keys)
 		for _, k := range keys {
-			fmt.Println(k, ":", p[k])
+			fmt.Printf("color%d: #%s", k, keys[k])
 		}
 
 		myImage := image.NewRGBA(image.Rect(0, 0, 400, 900))
@@ -98,11 +103,11 @@ var createCmd = &cobra.Command{
 		y := 0
 		for k, v := range p {
 			if k < 0 {
-				// for w := 150; w < 200; w++ {
-				// 	for h := -k * 2; h < h+50; h++ {
-				// 		myImage.Set(w, h, v.RGB)
-				// 	}
-				// }
+				for w := 300; w < 400; w++ {
+					for h := (-k % 2) * 100; h%100 < 99; h++ {
+						myImage.Set(w, h, v.RGB)
+					}
+				}
 				continue
 			}
 			for w := (k / 8) * 100; x < 100; w++ {
@@ -114,7 +119,6 @@ var createCmd = &cobra.Command{
 				y = 0
 			}
 			x = 0
-			fmt.Println(k, ":", (k/9)*100, (k%9)*100)
 		}
 
 		// x := 0
@@ -141,117 +145,125 @@ func init() {
 
 func delegate(dark *[]ColorVol, light *[]ColorVol) (map[int]ColorVol, error) {
 	m := make(map[int]ColorVol)
-	var bg ColorVol
-	var fg ColorVol
+	// var bg ColorVol
+	// var fg ColorVol
 
-	normal := []chromath.Lab{
-		//black
-		rgb2Lab(chromath.RGB{0.0, 0.0, 0.0}),
-		//red
-		rgb2Lab(chromath.RGB{128.0, 0.0, 0.0}),
-		//green
-		rgb2Lab(chromath.RGB{0.0, 128.0, 0.0}),
-		//yellow
-		rgb2Lab(chromath.RGB{128.0, 128.0, 0.0}),
-		//blue
-		rgb2Lab(chromath.RGB{0.0, 0.0, 128.0}),
-		//magenta
-		rgb2Lab(chromath.RGB{128.0, 0.0, 128.0}),
-		//cyan
-		rgb2Lab(chromath.RGB{0.0, 128.0, 128.0}),
-		//white
-		rgb2Lab(chromath.RGB{192.0, 192.0, 192.0}),
+	// normal := []chromath.Lab{
+	// 	//black
+	// 	rgb2Lab(chromath.RGB{0.0, 0.0, 0.0}),
+	// 	//red
+	// 	rgb2Lab(chromath.RGB{128.0, 0.0, 0.0}),
+	// 	//green
+	// 	rgb2Lab(chromath.RGB{0.0, 128.0, 0.0}),
+	// 	//yellow
+	// 	rgb2Lab(chromath.RGB{128.0, 128.0, 0.0}),
+	// 	//blue
+	// 	rgb2Lab(chromath.RGB{0.0, 0.0, 128.0}),
+	// 	//magenta
+	// 	rgb2Lab(chromath.RGB{128.0, 0.0, 128.0}),
+	// 	//cyan
+	// 	rgb2Lab(chromath.RGB{0.0, 128.0, 128.0}),
+	// 	//white
+	// 	rgb2Lab(chromath.RGB{192.0, 192.0, 192.0}),
+	// }
+
+	// // bright colors
+	// bright := []chromath.Lab{
+	// 	//black
+	// 	rgb2Lab(chromath.RGB{128.0, 128.0, 128.0}),
+	// 	//red
+	// 	rgb2Lab(chromath.RGB{255.0, 0.0, 0.0}),
+	// 	//green
+	// 	rgb2Lab(chromath.RGB{0.0, 255.0, 0.0}),
+	// 	//yellow
+	// 	rgb2Lab(chromath.RGB{255.0, 255.0, 0.0}),
+	// 	//blue
+	// 	rgb2Lab(chromath.RGB{0.0, 0.0, 255.0}),
+	// 	//magenta
+	// 	rgb2Lab(chromath.RGB{255.0, 0.0, 255.0}),
+	// 	//cyan
+	// 	rgb2Lab(chromath.RGB{0.0, 255.0, 255.0}),
+	// 	//white
+	// 	rgb2Lab(chromath.RGB{255.0, 255.0, 255.0}),
+	// }
+
+	sort.Sort(byDarkness(*dark))
+	sort.Sort(byDarkness(*light))
+
+	for i, d := range *dark {
+		m[i] = d
 	}
 
-	// bright colors
-	bright := []chromath.Lab{
-		//black
-		rgb2Lab(chromath.RGB{128.0, 128.0, 128.0}),
-		//red
-		rgb2Lab(chromath.RGB{255.0, 0.0, 0.0}),
-		//green
-		rgb2Lab(chromath.RGB{0.0, 255.0, 0.0}),
-		//yellow
-		rgb2Lab(chromath.RGB{255.0, 255.0, 0.0}),
-		//blue
-		rgb2Lab(chromath.RGB{0.0, 0.0, 255.0}),
-		//magenta
-		rgb2Lab(chromath.RGB{255.0, 0.0, 255.0}),
-		//cyan
-		rgb2Lab(chromath.RGB{0.0, 255.0, 255.0}),
-		//white
-		rgb2Lab(chromath.RGB{255.0, 255.0, 255.0}),
+	for i, l := range *light {
+		m[len(*dark)+i] = l
 	}
 
-	sort.Sort(byCount(*dark))
-	sort.Sort(byCount(*light))
+	// // most prominent color --> background
+	// bg = (*dark)[0]
+	// m[-2] = bg
 
-	// most prominent color --> background
-	bg = (*dark)[0]
-	m[-2] = bg
+	// // contrast to prominent --> foreground
+	// fg = (*light)[0]
+	// for _, c := range *light {
+	// 	if diff(bg.Lab, c.Lab, fg.Lab) > 0 {
+	// 		fg = c
+	// 	}
+	// }
+	// m[-1] = fg
 
-	// contrast to prominent --> foreground
-	fg = (*light)[0]
-	for _, c := range *light {
-		if diff(bg.Lab, c.Lab, fg.Lab) > 0 {
-			fg = c
-		}
-	}
-	m[-1] = fg
+	// for _, d := range *dark {
+	// 	if d == bg {
+	// 		continue
+	// 	}
 
-	for _, d := range *dark {
-		if d == bg {
-			continue
-		}
+	// 	var sim int
+	// 	for i := range bright {
+	// 		if _, ok := m[8+i]; ok {
+	// 			continue
+	// 		}
+	// 		sim = i
+	// 		break
+	// 	}
+	// 	for i := range normal {
+	// 		if _, ok := m[i]; ok {
+	// 			continue
+	// 		}
 
-		var sim int
-		for i := range bright {
-			if _, ok := m[8+i]; ok {
-				continue
-			}
-			sim = i
-			break
-		}
-		for i := range normal {
-			if _, ok := m[i]; ok {
-				continue
-			}
+	// 		if diff(d.Lab, normal[i], normal[sim]) < 0 {
+	// 			sim = i
+	// 		}
+	// 	}
+	// 	fmt.Println(sim)
 
-			if diff(d.Lab, normal[i], normal[sim]) < 0 {
-				sim = i
-			}
-		}
-		fmt.Println(sim)
+	// 	m[sim] = d
+	// }
 
-		m[sim] = d
-	}
+	// for _, l := range *light {
+	// 	if l == fg {
+	// 		continue
+	// 	}
 
-	for _, l := range *light {
-		if l == fg {
-			continue
-		}
+	// 	var sim int
+	// 	for i := range bright {
+	// 		if _, ok := m[8+i]; ok {
+	// 			continue
+	// 		}
+	// 		sim = i
+	// 		break
+	// 	}
+	// 	for i := range bright {
+	// 		if _, ok := m[8+i]; ok {
+	// 			continue
+	// 		}
 
-		var sim int
-		for i := range bright {
-			if _, ok := m[8+i]; ok {
-				continue
-			}
-			sim = i
-			break
-		}
-		for i := range bright {
-			if _, ok := m[8+i]; ok {
-				continue
-			}
+	// 		if diff(l.Lab, bright[i], bright[sim]) < 0 {
+	// 			sim = i
+	// 		}
+	// 	}
+	// 	fmt.Println(sim)
 
-			if diff(l.Lab, bright[i], bright[sim]) < 0 {
-				sim = i
-			}
-		}
-		fmt.Println(sim)
-
-		m[8+sim] = l
-	}
+	// 	m[8+sim] = l
+	// }
 
 	return m, nil
 }
@@ -273,7 +285,6 @@ func getColors(img image.Image) map[color.Color]int {
 			c := img.At(x, y)
 			if _, _, _, a := c.RGBA(); a != 0 {
 				m[c]++
-				numPix++
 			}
 		}
 	}
@@ -287,11 +298,10 @@ func map2ColorVolSlice(m map[color.Color]int) []ColorVol {
 
 	i := 0
 	for k, v := range m {
-		if float64(m[k])/numPix < 0.0005 {
+		r, g, b, _ := k.RGBA()
+		if byte(r) == 0 && byte(g) == 0 && byte(b) == 0 {
 			continue
 		}
-
-		r, g, b, _ := k.RGBA()
 		rgb := chromath.RGB{float64(byte(r)), float64(byte(g)), float64(byte(b))}
 		lab := rgb2Lab(rgb)
 		cvs = append(cvs, ColorVol{k, lab, v})
@@ -319,6 +329,11 @@ func quantize(path string, num int) (image.Image, error) {
 	colorquant.NoDither.Quantize(i, o, num, false, true)
 
 	return o, nil
+}
+
+func rgb2Hex(rgb color.Color) string {
+	r, g, b, _ := rgb.RGBA()
+	return fmt.Sprintf("#%x%x%x", r, g, b)
 }
 
 // converts an RGB color to its Lab equivalent
