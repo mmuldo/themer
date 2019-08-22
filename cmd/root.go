@@ -4,12 +4,18 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"os"
+	"path"
 
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
 )
 
-var cfgFile string
+var (
+	cfgFile   string
+	imgFile   string
+	name      string
+	themesDir = path.Join(os.Getenv("HOME"), ".config", "themer", "themes")
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -23,7 +29,7 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
-	//	Run: func(cmd *cobra.Command, args []string) { },
+	// Run: func(cmd *cobra.Command, args []string) {},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -43,10 +49,8 @@ func init() {
 	// will be global for your application.
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.themer.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.PersistentFlags().StringVarP(&imgFile, "image", "i", "", "image file to base theme off of")
+	rootCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "theme name")
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -63,8 +67,8 @@ func initConfig() {
 		}
 
 		// Search config in home directory with name ".themer" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".themer")
+		viper.AddConfigPath(path.Join(home, ".config", "themer"))
+		viper.SetConfigName("config")
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match

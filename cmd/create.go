@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	// "errors"
+	"encoding/json"
 	"fmt"
 	"github.com/esimov/colorquant"
 	"github.com/jkl1337/go-chromath"
@@ -10,23 +10,26 @@ import (
 	"image"
 	"image/color"
 	_ "image/jpeg"
-	"image/png"
+	_ "image/png"
+	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"sort"
+	"strconv"
 )
 
 var (
-	TargetIlluminant = &chromath.IlluminantRefD50
-	RGB2Xyz          = chromath.NewRGBTransformer(
+	targetIlluminant = &chromath.IlluminantRefD50
+	rgb2Xyz          = chromath.NewRGBTransformer(
 		&chromath.SpaceSRGB,
 		&chromath.AdaptationBradford,
-		TargetIlluminant,
+		targetIlluminant,
 		&chromath.Scaler8bClamping,
 		1.0,
 		nil,
 	)
-	Lab2Xyz = chromath.NewLabTransformer(TargetIlluminant)
+	lab2Xyz = chromath.NewLabTransformer(targetIlluminant)
 	klch    = &deltae.KLChDefault
 )
 
@@ -55,29 +58,29 @@ func (cvs byDarkness) Swap(i, j int) { cvs[i], cvs[j] = cvs[j], cvs[i] }
 // createCmd represents the create command
 var createCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Creates a new theme from image",
-	Long:  `Creates a new theme from image`,
-	// Args:  cobra.ExactArgs(0),
+	Short: "Creates a new theme",
+	Long: `Creates a new theme. Currently requires
+an image to be specified.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		i, e := quantize("/home/matt/Downloads/opal_fanart_su_by_urbietacreations_d8utzf1-pre.png", 16)
-		// i, e := quantize("/home/matt/Downloads/Opal_-_Gen_1_With_Weapon.webp", 17)
-		if e != nil {
-			log.Fatal(e)
-		}
-		hello, e := os.Create("/home/matt/Downloads/test2.png")
-		if e != nil {
-			log.Fatal(e)
-		}
-		defer hello.Close()
-		png.Encode(hello, i)
+		var r, g, b uint32
+		var hex string
+		theme := make(map[string]interface{})
 
+		// quantize provide image
+		i, e := quantize(imgFile, 16)
+		if e != nil {
+			log.Fatal(e)
+		}
+
+		// get colors from quantized image and convert to
+		// a slice of ColorVols
 		m := getColors(i)
 		cvs := map2ColorVolSlice(m)
 
-		sort.Sort(byDarkness(cvs))
-
+		// split colors into darks and lights
 		d, l := splitDarkAndLight(&cvs)
 
+		// assign colors to roles (color0, color1, etc.)
 		p, e := delegate(&d, &l)
 		if e != nil {
 			log.Fatal(e)
@@ -89,53 +92,19 @@ var createCmd = &cobra.Command{
 		}
 		sort.Ints(keys)
 		for _, k := range keys {
-			fmt.Printf("color%d = %s\n", k, rgb2Hex(p[k].RGB))
+			r, g, b, _ = p[k].RGB.RGBA()
+			hex = rgb2Hex(p[k].RGB)
+
+			theme["color"+strconv.Itoa(k)] = hex
+			fmt.Printf("\033[38;2;%d;%d;%dm color%d = %s\n", byte(r), byte(g), byte(b), k, hex)
 		}
+		theme["background"] = theme["color0"]
+		theme["foreground"] = theme["color8"]
 
-		// myImage := image.NewRGBA(image.Rect(0, 0, 400, 900))
-		// outFile, e := os.Create("/home/matt/Downloads/test1.png")
-		// if e != nil {
-		// 	log.Fatal(e)
-		// }
-		// defer outFile.Close()
-
-		// x := 0
-		// y := 0
-		// for k, v := range p {
-		// 	if k < 0 {
-		// 		for w := 300; w < 400; w++ {
-		// 			for h := (-k % 2) * 100; h%100 < 99; h++ {
-		// 				myImage.Set(w, h, v.RGB)
-		// 			}
-		// 		}
-		// 		continue
-		// 	}
-		// 	for w := (k / 8) * 100; x < 100; w++ {
-		// 		x++
-		// 		for h := (k % 8) * 100; y < 100; h++ {
-		// 			y++
-		// 			myImage.Set(w, h, v.RGB)
-		// 		}
-		// 		y = 0
-		// 	}
-		// 	x = 0
-		// }
-
-		// x := 0
-		// y := 0
-		// for _, cv := range cvs {
-		// 	for w := x; w-x < 200; w++ {
-		// 		for h := y; h-y < 200; h++ {
-		// 			myImage.Set(w, h, cv.RGB)
-		// 		}
-		// 	}
-		// 	x = (x + 200) % 800
-		// 	if x == 0 {
-		// 		y += 200
-		// 	}
-		// }
-
-		// png.Encode(outFile, myImage)
+		e = save(theme, name)
+		if e != nil {
+			log.Fatal(e)
+		}
 	},
 }
 
@@ -146,8 +115,8 @@ func init() {
 func delegate(dark *[]ColorVol, light *[]ColorVol) (map[int]ColorVol, error) {
 	m := make(map[int]ColorVol)
 
-	sort.Sort(byDarkness(*dark))
-	sort.Sort(byDarkness(*light))
+	sort.Sort(byCount(*dark))
+	sort.Sort(byCount(*light))
 
 	for i, d := range *dark {
 		m[i] = d
@@ -172,12 +141,9 @@ func getColors(img image.Image) map[color.Color]int {
 	m := make(map[color.Color]int)
 
 	w, h := img.Bounds().Max.X, img.Bounds().Max.Y
-	for x := 0; x < w; x += 1 {
-		for y := 0; y < h; y += 1 {
-			c := img.At(x, y)
-			if _, _, _, a := c.RGBA(); a != 0 {
-				m[c]++
-			}
+	for x := 0; x < w; x += 5 {
+		for y := 0; y < h; y += 5 {
+			m[img.At(x, y)]++
 		}
 	}
 
@@ -191,9 +157,6 @@ func map2ColorVolSlice(m map[color.Color]int) []ColorVol {
 	i := 0
 	for k, v := range m {
 		r, g, b, _ := k.RGBA()
-		if byte(r) == 0 && byte(g) == 0 && byte(b) == 0 {
-			continue
-		}
 		rgb := chromath.RGB{float64(byte(r)), float64(byte(g)), float64(byte(b))}
 		lab := rgb2Lab(rgb)
 		cvs = append(cvs, ColorVol{k, lab, v})
@@ -216,7 +179,7 @@ func quantize(path string, num int) (image.Image, error) {
 		return nil, e
 	}
 	b := i.Bounds()
-	o := image.NewRGBA(image.Rect(b.Min.X, b.Min.Y, b.Max.X, b.Max.Y))
+	o := image.NewNRGBA(image.Rect(b.Min.X, b.Min.Y, b.Max.X, b.Max.Y))
 
 	colorquant.NoDither.Quantize(i, o, num, false, true)
 
@@ -225,13 +188,33 @@ func quantize(path string, num int) (image.Image, error) {
 
 func rgb2Hex(rgb color.Color) string {
 	r, g, b, _ := rgb.RGBA()
-	return fmt.Sprintf("#%x%x%x", byte(r), byte(g), byte(b))
+	return fmt.Sprintf("#%02x%02x%02x", byte(r), byte(g), byte(b))
 }
 
 // converts an RGB color to its Lab equivalent
 func rgb2Lab(rgb chromath.RGB) chromath.Lab {
-	xyz := RGB2Xyz.Convert(rgb)
-	return Lab2Xyz.Invert(xyz)
+	xyz := rgb2Xyz.Convert(rgb)
+	return lab2Xyz.Invert(xyz)
+}
+
+func save(theme map[string]interface{}, name string) error {
+	p := path.Join(os.Getenv("HOME"), ".config", "themer", "themes")
+
+	if i, e := os.Stat(p); os.IsNotExist(e) || !i.IsDir() {
+		os.MkdirAll(p, os.ModePerm)
+	}
+
+	json, e := json.MarshalIndent(theme, "", "\t")
+	if e != nil {
+		return e
+	}
+
+	e = ioutil.WriteFile(path.Join(p, name), json, 0644)
+	if e != nil {
+		return e
+	}
+
+	return nil
 }
 
 func splitDarkAndLight(cvs *[]ColorVol) ([]ColorVol, []ColorVol) {
