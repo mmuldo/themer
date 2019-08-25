@@ -9,14 +9,11 @@ import (
 	"fmt"
 	"github.com/flosch/pongo2"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"io/ioutil"
 	"os"
 	"path"
-)
-
-var (
-	terminal string
+	"strconv"
+	"strings"
 )
 
 // switchCmd represents the switch command
@@ -30,11 +27,13 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		setDefaults()
-
 		switch terminal {
 		case "termite":
-			template(path.Join(".config", "termite", "config"), name)
+			e := template(path.Join(".config", "termite", "config"), name)
+			if e != nil {
+				fmt.Println(e)
+				os.Exit(1)
+			}
 		default:
 			fmt.Println(fmt.Errorf("'%s' is not a supported app", terminal))
 			os.Exit(1)
@@ -45,13 +44,45 @@ to quickly create a Cobra application.`,
 func init() {
 	rootCmd.AddCommand(switchCmd)
 
-	rootCmd.PersistentFlags().StringVarP(&terminal, "terminal", "t", "", "user terminal")
+	pongo2.RegisterFilter("hex2RGB", filterHex2RGB)
 }
 
-func setDefaults() {
-	if terminal == "" {
-		terminal = viper.GetString("terminal")
+func hex2RGB(hex string) (int, int, int, error) {
+	h := strings.Split(hex, "#")
+	hex = h[len(h)-1]
+	if len(hex) != 6 {
+		return -1, -1, -1, fmt.Errorf("%s is not a valid hex value.", hex)
 	}
+
+	r, e := strconv.ParseUint(hex[:2], 16, 8)
+	if e != nil {
+		return -1, -1, -1, e
+	}
+
+	g, e := strconv.ParseUint(hex[2:4], 16, 8)
+	if e != nil {
+		return -1, -1, -1, e
+	}
+
+	b, e := strconv.ParseUint(hex[4:], 16, 8)
+	if e != nil {
+		return -1, -1, -1, e
+	}
+
+	return int(r), int(g), int(b), nil
+}
+
+var filterHex2RGB pongo2.FilterFunction = func(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
+	r, g, b, e := hex2RGB(in.String())
+	if e != nil {
+		err := pongo2.Error{
+			nil, "", -1, -1, nil, "", e,
+		}
+		fmt.Println(e)
+		return nil, &err
+	}
+
+	return pongo2.AsValue([]int{r, g, b}), nil
 }
 
 func template(filepath string, theme string) error {

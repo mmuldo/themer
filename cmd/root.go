@@ -14,6 +14,7 @@ var (
 	cfgFile   string
 	imgFile   string
 	name      string
+	terminal  string
 	themesDir = path.Join(os.Getenv("HOME"), ".config", "themer", "themes")
 )
 
@@ -29,7 +30,7 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	Run: func(cmd *cobra.Command, args []string) { fmt.Println(terminal, viper.GetString("terminal")) },
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -42,7 +43,8 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
+	// cobra.OnInitialize(initConfig)
+	initConfig()
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
@@ -51,6 +53,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.themer.yaml)")
 	rootCmd.PersistentFlags().StringVarP(&imgFile, "image", "i", "", "image file to base theme off of")
 	rootCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "theme name")
+	rootCmd.PersistentFlags().StringVarP(&terminal, "terminal", "t", viper.GetString("terminal"), "user terminal")
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -76,5 +79,11 @@ func initConfig() {
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
+	}
+}
+
+func setDefaults() {
+	if terminal == "" {
+		terminal = viper.GetString("terminal")
 	}
 }

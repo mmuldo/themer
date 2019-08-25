@@ -5,7 +5,7 @@ browser = firefox
 
 [colors]
 foreground = {{ foreground }}
-background = {{ background }}
+{% set rgb = background|hex2RGB %}background = rgba({{ rgb.0 }}, {{ rgb.1 }}, {{ rgb.2 }}, {{ transparency }})
 foreground_bold = {{ foreground }}
 cursor = {{ foreground }}
 cursor_foreground = {{ background }}
