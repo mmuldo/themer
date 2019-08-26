@@ -88,20 +88,40 @@ func Create(p *Palette, opts map[string]interface{}) (*Theme, error) {
 // Delegate converts a ColorVol slice to a Palette.
 func Delegate(cvs *[]ColorVol) (*Palette, error) {
 	p := make(Palette) // Palette to return
+	pairs := make([][]ColorVol, 0)
+	done := make([]bool, len(*cvs))
+	var a, b int
 
-	// group colors into darks and lights
 	sort.Sort(byDarkness(*cvs))
-	d := (*cvs)[:len(*cvs)/2]
-	l := (*cvs)[len(*cvs)/2:]
 
-	// assign roles by prevalence
-	sort.Sort(byCount(d))
-	sort.Sort(byCount(l))
-	for i, c := range d {
-		p[i] = c
+	a = 0
+	for i, c0 := range *cvs {
+		if done[i] {
+			continue
+		}
+
+		pairs = append(pairs, make([]ColorVol, 2))
+		pairs[a][0] = c0
+		done[i] = true
+
+		for j, c1 := range (*cvs)[i+1:] {
+			if done[j+i+1] {
+				continue
+			}
+
+			if pairs[a][1] == (ColorVol{}) || diff(&pairs[a][0], &pairs[a][1], &c1) > 0 {
+				pairs[a][1] = c1
+				b = j + i + 1
+			}
+		}
+		done[b] = true
+		a++
 	}
-	for i, c := range l {
-		p[len(d)+i] = c
+
+	for i, pair := range pairs {
+		sort.Sort(byDarkness(pair))
+		p[i] = pair[0]
+		p[len(pairs)+i] = pair[1]
 	}
 
 	return &p, nil
@@ -157,8 +177,8 @@ func GetColors(path string, num int) (*[]ColorVol, error) {
 // base is the color used for comparison. return value is postive
 // if c0 is more different; negative if c1 is more different; 0 if
 // both colors are just as different from base.
-func diff(base chromath.Lab, c0 chromath.Lab, c1 chromath.Lab) float64 {
-	return deltae.CIE2000(c0, base, klch) - deltae.CIE2000(c1, base, klch)
+func diff(base *ColorVol, c0 *ColorVol, c1 *ColorVol) float64 {
+	return deltae.CIE2000((*c0).Lab, (*base).Lab, klch) - deltae.CIE2000((*c1).Lab, (*base).Lab, klch)
 }
 
 func rgb2Hex(rgb color.Color) string {
@@ -176,6 +196,6 @@ func setDefaults(t *Theme) {
 	}
 
 	if _, ok := (*t)["foreground"]; !ok {
-		(*t)["foreground"] = (*t)["color8"]
+		(*t)["foreground"] = (*t)["color7"]
 	}
 }
