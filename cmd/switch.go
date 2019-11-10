@@ -27,16 +27,12 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		switch terminal {
-		case "termite":
-			e := template(path.Join(".config", "termite", "config"), name)
+		for _, v := range user_apps {
+			e := template(supported_apps[v], name)
 			if e != nil {
 				fmt.Println(e)
 				os.Exit(1)
 			}
-		default:
-			fmt.Println(fmt.Errorf("'%s' is not a supported app", terminal))
-			os.Exit(1)
 		}
 	},
 }
@@ -86,8 +82,16 @@ var filterHex2RGB pongo2.FilterFunction = func(in *pongo2.Value, param *pongo2.V
 }
 
 func template(filepath string, theme string) error {
+	fmt.Println(theme)
 	ctxt := make(map[string]interface{})
 	f, e := ioutil.ReadFile(path.Join(themesDir, theme))
+	if f == nil {
+		fmt.Println("failed")
+		os.Exit(1)
+	}
+	if e != nil {
+		return e
+	}
 
 	e = json.Unmarshal(f, &ctxt)
 

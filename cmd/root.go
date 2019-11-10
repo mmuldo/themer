@@ -11,11 +11,16 @@ import (
 )
 
 var (
-	cfgFile   string
-	imgFile   string
-	name      string
+	cfgFile        string
+	imgFile        string
+	name           string
+	supported_apps = map[string]string{
+		"termite": path.Join(".config", "termite", "config"),
+		"polybar": path.Join(".config", "polybar", "colors"),
+	}
 	terminal  string
 	themesDir = path.Join(os.Getenv("HOME"), ".config", "themer", "themes")
+	user_apps map[string]string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -43,8 +48,7 @@ func Execute() {
 }
 
 func init() {
-	// cobra.OnInitialize(initConfig)
-	initConfig()
+	cobra.OnInitialize(initConfig)
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
@@ -53,7 +57,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.themer.yaml)")
 	rootCmd.PersistentFlags().StringVarP(&imgFile, "image", "i", "", "image file to base theme off of")
 	rootCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "theme name")
-	rootCmd.PersistentFlags().StringVarP(&terminal, "terminal", "t", viper.GetString("terminal"), "user terminal")
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -80,10 +83,17 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
-}
 
-func setDefaults() {
-	if terminal == "" {
-		terminal = viper.GetString("terminal")
+	err := viper.UnmarshalKey("apps", &user_apps)
+	if err != nil {
+		fmt.Println(fmt.Errorf("Unable to decode 'apps' from config file."))
+		os.Exit(1)
+	}
+
+	for _, v := range user_apps {
+		if _, ok := supported_apps[v]; !ok {
+			fmt.Println(fmt.Errorf("'%s' is not a supported app", v))
+			os.Exit(1)
+		}
 	}
 }
